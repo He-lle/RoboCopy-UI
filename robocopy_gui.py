@@ -177,6 +177,7 @@ class App(tk.Tk):
         self._build_menu()
         self._build_ui()
         self._ui_from_p()
+        self._bind_traces()
         self._update_cmd()
 
         self.bind("<F5>", lambda e: self._run())
@@ -437,6 +438,15 @@ class App(tk.Tk):
     def _update_cmd(self):
         self._p_from_ui()
         self._cmd_var.set(cmd_str(self.p))
+
+    def _bind_traces(self):
+        """给所有 UI 变量加 trace，变化时实时更新命令预览"""
+        for attr in dir(self):
+            if attr.endswith("_var") and isinstance(getattr(self, attr), tk.Variable):
+                try:
+                    getattr(self, attr).trace_add("write", lambda *_: self._update_cmd())
+                except:
+                    pass
 
     # ── 执行 ──────────────────────────
     def _run(self):
