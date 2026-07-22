@@ -69,6 +69,53 @@ def params_to_argv(p):
     if p.get("l"): a.append("/L")
     if p.get("njh"): a.append("/NJH")
     if p.get("njs"): a.append("/NJS")
+    if p.get("x"): a.append("/X")
+    if p.get("nooffload"): a.append("/NOOFFLOAD")
+    if p.get("fft"): a.append("/FFT")
+    if p.get("dst_"): a.append("/DST")
+    if p.get("sl"): a.append("/SL")
+    if p.get("sj"): a.append("/SJ")
+    if p.get("xjd"): a.append("/XJD")
+    if p.get("xjf"): a.append("/XJF")
+    if p.get("create"): a.append("/CREATE")
+    if p.get("fat"): a.append("/FAT")
+    if p.get("zb"): a.append("/ZB")
+    if p.get("efsraw"): a.append("/EFSRAW")
+    for flag in ["xc","xx","xl","is_","it","im"]:
+        if p.get(flag): a.append(f"/{flag.capitalize().rstrip('_')}")
+    for flag in ["maxlad","minlad"]:
+        if p.get(flag,"").strip(): a.append(f"/{flag.upper()}:{p[flag].strip()}")
+    if p.get("reg"): a.append("/REG")
+    if p.get("tbd"): a.append("/TBD")
+    if p.get("lfsm"):
+        v = p.get("lfsm_val","").strip()
+        a.append(f"/LFSM:{v}" if v else "/LFSM")
+    if p.get("log","").strip():
+        tag = "/LOG+:" if p.get("log_append") else "/LOG:"
+        a.append(f"{tag}{p['log'].strip()}")
+    if p.get("ts"): a.append("/TS")
+    if p.get("fp"): a.append("/FP")
+    if p.get("bytes"): a.append("/BYTES")
+    if p.get("nc"): a.append("/NC")
+    if p.get("ns"): a.append("/NS")
+    if p.get("nfl"): a.append("/NFL")
+    if p.get("ndl"): a.append("/NDL")
+    if p.get("tee"): a.append("/TEE")
+    # 时间窗口 /RH
+    if p.get("rh_start","").strip() and p.get("rh_end","").strip():
+        a.append(f"/RH:{p['rh_start'].strip()}-{p['rh_end'].strip()}")
+    if p.get("pf"): a.append("/PF")
+    # 添加/删除属性
+    if p.get("a_plus","").strip(): a.append(f"/A+:{p['a_plus'].strip()}")
+    if p.get("a_minus","").strip(): a.append(f"/A-:{p['a_minus'].strip()}")
+    # Job 文件
+    if p.get("job","").strip(): a.append(f"/JOB:{p['job'].strip()}")
+    if p.get("save","").strip(): a.append(f"/SAVE:{p['save'].strip()}")
+    # 属性包含/排除
+    ia = "".join(p.get(f"ia_{x}") for x in "RASHCNET" if p.get(f"ia_{x}"))
+    if ia: a.append(f"/IA:{ia}")
+    xa = "".join(p.get(f"xa_{x}") for x in "RASHCNET" if p.get(f"xa_{x}"))
+    if xa: a.append(f"/XA:{xa}")
     return a
 
 def cmd_str(p):
@@ -102,6 +149,21 @@ class App(tk.Tk):
             "min":"","max":"","minage":"","maxage":"",
             "xj":False,"retry":3,"wait":10,"mt":8,"ipg":0,
             "v":True,"eta":True,"l":False,
+            "x":False,"nooffload":False,
+            "fft":False,"dst_":False,
+            "sl":False,"xjd":False,"xjf":False,"sj":False,
+            "create":False,"fat":False,
+            "zb":False,"efsraw":False,
+            "xc":False,"xx":False,"xl":False,"is_":False,"it":False,"im":False,
+            "maxlad":"","minlad":"",
+            "reg":False,"tbd":False,
+            "lfsm":False,"lfsm_val":"",
+            "log":"","log_append":False,
+            "ts":False,"fp":False,"bytes":False,
+            "nc":False,"ns":False,"nfl":False,"ndl":False,"tee":False,
+            "rh_start":"","rh_end":"","pf":False,
+            "a_plus":"","a_minus":"",
+            "job":"","save":"",
         }
 
         self._running = False
@@ -240,6 +302,10 @@ class App(tk.Tk):
                                         "保留数据、属性、时间、权限等")
         self._mov_var = self._check(f, "移动（复制后删除源）",
                                     "相当于剪切，源文件会消失")
+        # ── 新增选项 ──
+        self._zb_var = self._check(f, "可重启+备份模式 /ZB", "先尝试重启，被拒则用备份")
+        self._create_var = self._check(f, "仅创建目录和空文件", "/CREATE")
+        self._sl_var = self._check(f, "符号链接保留为链接", "/SL")
         self._t2 = f
 
     def _build_tab3(self, parent):
@@ -253,6 +319,11 @@ class App(tk.Tk):
         self._max_s_var = self._entry(f, "最大大小：", placeholder="10M")
         self._min_a_var = self._entry(f, "至少距今：", placeholder="天数或 YYYYMMDD")
         self._max_a_var = self._entry(f, "最多距今：", placeholder="天数或 YYYYMMDD")
+        # ── 新增选项 ──
+        self._minlad_var = self._entry(f, "最后访问 ≥：", placeholder="天数或 YYYYMMDD")
+        self._maxlad_var = self._entry(f, "最后访问 ≤：", placeholder="天数或 YYYYMMDD")
+        self._xc_var = self._check(f, "排除已更改文件", "/XC")
+        self._im_var = self._check(f, "包含修改时间不同", "/IM")
         self._t3 = f
 
     def _build_tab4(self, parent):
@@ -265,6 +336,15 @@ class App(tk.Tk):
         self._v_var = self._check(f, "详细输出（推荐）")
         self._eta_var = self._check(f, "显示预计完成时间")
         self._l_var = self._check(f, "仅列出不复制（安全预览）")
+        # ── 新增选项 ──
+        self._reg_var = self._check(f, "保存为注册表默认 /REG")
+        self._tbd_var = self._check(f, "等待共享名可用 /TBD")
+        self._lfsm_var = self._check(f, "低磁盘空间模式 /LFSM")
+        self._ts_var = self._check(f, "显示文件时间 /TS")
+        self._nc_var = self._check(f, "不显示文件类 /NC")
+        self._ns_var = self._check(f, "不显示文件大小 /NS")
+        self._nfl_var = self._check(f, "不显示文件列表 /NFL")
+        self._ndl_var = self._check(f, "不显示目录列表 /NDL")
         self._t4 = f
 
     # ── 组件 ──────────────────────────
@@ -326,6 +406,16 @@ class App(tk.Tk):
         ("_retry_var","retry",int),("_wait_var","wait",int),
         ("_mt_var","mt",int),("_ipg_var","ipg",int),
         ("_v_var","v"),("_eta_var","eta"),("_l_var","l"),
+        # 新增
+        ("_zb_var","zb"),("_create_var","create"),
+        ("_sl_var","sl"),
+        ("_minlad_var","minlad"),("_maxlad_var","maxlad"),
+        ("_xc_var","xc"),("_im_var","im"),
+        ("_reg_var","reg"),("_tbd_var","tbd"),
+        ("_lfsm_var","lfsm"),
+        ("_ts_var","ts"),
+        ("_nc_var","nc"),("_ns_var","ns"),
+        ("_nfl_var","nfl"),("_ndl_var","ndl"),
     ]
 
     def _p_from_ui(self):
