@@ -201,6 +201,9 @@ class App(tk.Tk):
     def _build_menu(self):
         mb = tk.Menu(self); self.config(menu=mb)
         fm = tk.Menu(mb, tearoff=0)
+        fm.add_command(label="保存配置", command=self._save_config, accelerator="Ctrl+S")
+        fm.add_command(label="加载配置", command=self._load_config, accelerator="Ctrl+O")
+        fm.add_separator()
         fm.add_command(label="退出", command=self._on_close, accelerator="Ctrl+Q")
         mb.add_cascade(label="文件", menu=fm)
         rm = tk.Menu(mb, tearoff=0)
@@ -582,6 +585,38 @@ class App(tk.Tk):
         self._out.delete("1.0", tk.END)
         self._out.config(state=tk.DISABLED)
         self._out_lines = 0
+
+    # ── 配置保存/加载 ──────────────────
+    def _save_config(self):
+        import json
+        path = filedialog.asksaveasfilename(defaultextension=".json",
+                                           filetypes=[("JSON","*.json")])
+        if not path: return
+        self._p_from_ui()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.p, f, ensure_ascii=False, indent=2)
+            self._st.set(f"配置已保存：{os.path.basename(path)}")
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+
+    def _load_config(self):
+        import json
+        path = filedialog.askopenfilename(filetypes=[("JSON","*.json")])
+        if not path: return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            for k in self.p:
+                if k in d and isinstance(d[k], (bool,int,str)):
+                    self.p[k] = d[k]
+            self._ui_from_p()
+            self._update_cmd()
+            self._st.set(f"配置已加载：{os.path.basename(path)}")
+        except json.JSONDecodeError:
+            messagebox.showerror("加载失败", "配置文件格式错误。")
+        except Exception as e:
+            messagebox.showerror("加载失败", str(e))
 
     # ── 关闭 ──────────────────────────
     def _on_close(self):
